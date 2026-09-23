@@ -18,6 +18,8 @@ Cowork é um **modo de sessão** — não um modelo novo, não um produto separa
 
 > Nota histórica: em set/2026 a Anthropic fundiu o Cowork ao chat principal do Claude, removendo o toggle — o roteamento passou a ser automático. A lição de design está documentada em [`docs/05-research.md`](docs/05-research.md): o toggle explícito e o roteamento automático são duas respostas válidas para o mesmo problema.
 
+> **Stack dos exemplos:** JavaScript/React (Node 18+ no host, JSX no painel) — mas o **padrão é agnóstico de linguagem**: lei em markdown, estado como fold sobre log de eventos, painel como `<img>` alimentada por URL. Portar para Python/Go/Elixir é reimplementar ~150 linhas de lógica; os docs explicam o contrato, não a sintaxe.
+
 ## Os 4 sistemas
 
 O Cowork é composto por quatro sistemas independentes e combináveis. Cada um tem um documento dedicado:
@@ -33,7 +35,7 @@ Mais:
 
 - [`docs/05-research.md`](docs/05-research.md) — como Claude Cowork, ChatGPT Work e Browser Use Cloud implementam cada peça (com fontes).
 - [`docs/06-integration-checklist.md`](docs/06-integration-checklist.md) — checklist de integração + armadilhas reais que encontramos em produção.
-- [`schema/cowork-mode.schema.json`](schema/cowork-mode.schema.json) — contrato de configuração (JSON Schema) de um modo Cowork declarativo.
+- [`schema/cowork-mode.schema.json`](schema/cowork-mode.schema.json) — contrato de configuração (JSON Schema) de um modo Cowork declarativo, com [`schema/cowork-mode.example.json`](schema/cowork-mode.example.json) preenchido de referência.
 
 ## Quickstart (30 minutos)
 
@@ -78,7 +80,8 @@ cowork-schema/
 ├── law/
 │   └── cowork-core.md               ← a lei do modo (protocolo de conduta do agente)
 ├── schema/
-│   └── cowork-mode.schema.json      ← contrato declarativo de um modo Cowork
+│   ├── cowork-mode.schema.json      ← contrato declarativo de um modo Cowork
+│   └── cowork-mode.example.json     ← config completo de referência (validável contra o schema)
 ├── examples/
 │   ├── host-commands.js             ← Sistemas 1+2: comandos /cowork·/chat + injeção no system prompt
 │   ├── browser-feed.js              ← Sistema 4: extração do feed de screenshots da sessão

@@ -8,11 +8,19 @@ Variáveis dessincronizam: reload da página, restart do servidor, segunda aba a
 
 ## O fold
 
-Cada troca de modo grava um evento no log:
+Cada troca de modo grava um evento no log. Exemplo completo de um log real com os dois comandos:
 
 ```json
-{ "type": "command/run", "data": { "name": "cowork" }, "seq": 42, "ts": "2026-09-23T14:02:11Z" }
+[
+  { "type": "session/start", "seq": 1,  "ts": "2026-09-23T13:58:02Z" },
+  { "type": "message/user",  "seq": 2,  "ts": "2026-09-23T13:58:40Z", "data": { "text": "pesquise concorrentes de cardápio digital" } },
+  { "type": "command/run",   "seq": 3,  "ts": "2026-09-23T13:58:41Z", "data": { "name": "cowork" } },
+  { "type": "tool-result",   "seq": 4,  "ts": "2026-09-23T13:59:10Z", "data": { "tool": "bu_run", "text": "step 1 ok — https://cdn.browser-use.com/screenshots/t1/01.png" } },
+  { "type": "command/run",   "seq": 5,  "ts": "2026-09-23T14:02:11Z", "data": { "name": "chat" } }
+]
 ```
+
+`foldMode` percorre essa lista e devolve `""` (o último comando foi `/chat`). Campos mínimos por evento de comando: `type`, `data.name`, `seq` (ordenação), `ts` (auditoria).
 
 O estado atual é o **último** evento relevante — um fold (redução) sobre o log:
 

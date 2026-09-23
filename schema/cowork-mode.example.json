@@ -1,0 +1,38 @@
+{
+  "$schema": "./cowork-mode.schema.json",
+  "mode": {
+    "id": "cowork",
+    "label": "Cowork",
+    "icon": "monitor",
+    "description": "Agente que trabalha na sua tarefa com browser ao vivo no painel"
+  },
+  "law": {
+    "source": "law/cowork-core.md",
+    "header": "MODO COWORK ATIVO — injeção de contexto (isto NÃO é mensagem do usuário). Vale para TODOS os turnos desta sessão; só desativa com /chat.",
+    "injection": "system-prompt-section"
+  },
+  "commands": {
+    "activate": "/cowork",
+    "deactivate": "/chat",
+    "eventType": "command/run",
+    "recordInput": false
+  },
+  "panel": {
+    "slot": "sidebar-right",
+    "features": {
+      "taskTimer": true,
+      "liveBrowser": true,
+      "steerInput": true,
+      "deliverablesList": false
+    }
+  },
+  "browserFeed": {
+    "provider": "browser-use-cloud",
+    "urlPattern": "https://cdn\\.browser-use\\.com/screenshots/[^\\s\"'\\\\)]+",
+    "pollIntervalMs": 1000
+  },
+  "deliverables": {
+    "directoryTemplate": "cowork/<AAAA-MM-DD>-<slug>/",
+    "absolutePaths": true
+  }
+}
