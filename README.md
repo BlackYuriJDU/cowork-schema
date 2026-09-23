@@ -1,112 +1,123 @@
 # cowork-schema
 
-**O padrão aberto para adicionar um modo "Cowork" ao seu próprio app de IA** — chat comum de um lado, agente que *trabalha* do outro, com o usuário vendo tudo acontecer em tempo real.
+**The open pattern for adding a "Cowork" mode to your own AI app** — a regular chat on one side, an agent that *works* on the other, with the user watching everything happen in real time.
 
-Este repositório extrai, generaliza e documenta o sistema Cowork que rodava em produção dentro do [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (plugin `dsh-deepseek-design`), inspirado no **Claude Cowork** (Anthropic) e no **ChatGPT Work** (OpenAI) — mas escrito para ser integrado em **qualquer** site ou app com um agente de IA, sem depender de nenhum deles.
+This repository extracts, generalizes and documents a Cowork system that ran in production inside an agent harness (as a client/server plugin), inspired by **Claude Cowork** (Anthropic) and **ChatGPT Work** (OpenAI) — but written to be integrated into **any** site or app with an AI agent, without depending on any of them.
 
----
+## What is "Cowork"?
 
-## O que é "Cowork"?
+Cowork is a **session mode** — not a new model, not a separate product. When active:
 
-Cowork é um **modo de sessão** — não um modelo novo, não um produto separado. Quando ativo:
+1. **The agent works, not just chats.** It executes multi-step tasks (browsing the web, reading/writing files, producing deliverables) instead of answering one prompt at a time.
+2. **The user watches.** A side panel shows what the agent is doing in real time — in our case, live screenshots of the browser the agent is operating.
+3. **Strict rules of conduct.** A behavior "law" is injected into the agent's context: narrate every step, never run destructive actions without confirmation, deliver files to predictable locations, wrap up with a summary.
 
-1. **O agente trabalha, não apenas conversa.** Ele executa tarefas multi-etapas (navegar na web, ler/escrever arquivos, produzir entregas) em vez de responder um prompt por vez.
-2. **O usuário assiste.** Um painel lateral mostra o que o agente está fazendo em tempo real — no nosso caso, screenshots ao vivo do navegador que o agente está operando.
-3. **Regras rígidas de conduta.** Uma "lei" de comportamento é injetada no contexto do agente: narrar cada passo, nunca executar ações destrutivas sem confirmação, entregar arquivos em locais previsíveis, encerrar com resumo.
+It's the same pattern Anthropic popularized with Claude Cowork (Jan 2026) and OpenAI followed with ChatGPT Work (Jul 2026): **delegate an outcome, watch the process, review the deliverable.**
 
-É o mesmo padrão que a Anthropic popularizou com o Claude Cowork (jan/2026) e a OpenAI seguiu com o ChatGPT Work (jul/2026): **delegar um resultado, acompanhar o processo, revisar a entrega.**
+> Historical note: in Sept 2026 Anthropic merged Cowork into Claude's main chat, removing the toggle — routing became automatic. The design lesson is documented in [`docs/05-research.md`](docs/05-research.md): an explicit toggle and automatic routing are both valid answers to the same problem.
 
-> Nota histórica: em set/2026 a Anthropic fundiu o Cowork ao chat principal do Claude, removendo o toggle — o roteamento passou a ser automático. A lição de design está documentada em [`docs/05-research.md`](docs/05-research.md): o toggle explícito e o roteamento automático são duas respostas válidas para o mesmo problema.
+> **Example stack:** JavaScript/React (Node 18+ on the host, JSX in the panel) — but the **pattern is language-agnostic**: a markdown law, state as a fold over an event log, a panel as an `<img>` fed by URLs. Porting to Python/Go/Elixir means reimplementing ~150 lines of logic; the docs explain the contract, not the syntax.
 
-> **Stack dos exemplos:** JavaScript/React (Node 18+ no host, JSX no painel) — mas o **padrão é agnóstico de linguagem**: lei em markdown, estado como fold sobre log de eventos, painel como `<img>` alimentada por URL. Portar para Python/Go/Elixir é reimplementar ~150 linhas de lógica; os docs explicam o contrato, não a sintaxe.
+## The 4 systems
 
-## Os 4 sistemas
+Cowork is composed of four independent, composable systems. Each has a dedicated doc:
 
-O Cowork é composto por quatro sistemas independentes e combináveis. Cada um tem um documento dedicado:
+| # | System | What it does | Doc |
+|---|--------|--------------|-----|
+| 1 | **Mode Law** | Conduct protocol injected into the system prompt while the mode is active | [`docs/01-mode-law.md`](docs/01-mode-law.md) |
+| 2 | **Mode State** | State derived from the session event log (fold), not a volatile variable — survives reload | [`docs/02-mode-state.md`](docs/02-mode-state.md) |
+| 3 | **Live Panel** | Side UI with task timer, live browser (screenshots) and steering input | [`docs/03-live-panel.md`](docs/03-live-panel.md) |
+| 4 | **Browser Feed** | Pipeline that turns the agent's navigation into images the panel displays | [`docs/04-browser-feed.md`](docs/04-browser-feed.md) |
 
-| # | Sistema | O que faz | Doc |
-|---|---------|-----------|-----|
-| 1 | **Mode Law** (lei do modo) | Protocolo de conduta injetado no system prompt enquanto o modo estiver ativo | [`docs/01-mode-law.md`](docs/01-mode-law.md) |
-| 2 | **Mode State** (estado do modo) | Estado derivado do log de eventos da sessão (fold), não de variável volátil — sobrevive a reload | [`docs/02-mode-state.md`](docs/02-mode-state.md) |
-| 3 | **Live Panel** (painel ao vivo) | UI lateral com cronômetro, browser ao vivo (screenshots) e caixa de direcionamento | [`docs/03-live-panel.md`](docs/03-live-panel.md) |
-| 4 | **Browser Feed** (feed do navegador) | Pipeline que transforma a navegação do agente em imagens que o painel exibe | [`docs/04-browser-feed.md`](docs/04-browser-feed.md) |
+Also:
 
-Mais:
+- [`docs/05-research.md`](docs/05-research.md) — how Claude Cowork, ChatGPT Work and Browser Use Cloud implement each piece (with sources).
+- [`docs/06-integration-checklist.md`](docs/06-integration-checklist.md) — integration checklist + real production traps.
+- [`schema/cowork-mode.schema.json`](schema/cowork-mode.schema.json) — declarative configuration contract (JSON Schema) for a Cowork mode, with a filled reference in [`schema/cowork-mode.example.json`](schema/cowork-mode.example.json).
 
-- [`docs/05-research.md`](docs/05-research.md) — como Claude Cowork, ChatGPT Work e Browser Use Cloud implementam cada peça (com fontes).
-- [`docs/06-integration-checklist.md`](docs/06-integration-checklist.md) — checklist de integração + armadilhas reais que encontramos em produção.
-- [`schema/cowork-mode.schema.json`](schema/cowork-mode.schema.json) — contrato de configuração (JSON Schema) de um modo Cowork declarativo, com [`schema/cowork-mode.example.json`](schema/cowork-mode.example.json) preenchido de referência.
+## Quickstart (30 minutes)
 
-## Quickstart (30 minutos)
-
-Pré-requisito: você já tem um app com um agente de IA que (a) aceita system prompt dinâmico e (b) tem alguma ferramenta de navegação web.
+Prerequisites: you already have an app with an AI agent that (a) accepts a dynamic system prompt and (b) has some web-navigation tool.
 
 ```bash
 git clone https://github.com/BlackYuriJDU/cowork-schema.git
 cd cowork-schema
 ```
 
-**1. Copie a lei do modo e ajuste os caminhos:**
+**0. Get a Browser Use Cloud API key** — the canonical browser provider; it hosts the screenshots the panel displays:
+
+1. Sign up at [cloud.browser-use.com](https://cloud.browser-use.com) (eligible new accounts get one-time credits).
+2. Create a key at [cloud.browser-use.com/new-api-key](https://cloud.browser-use.com/new-api-key).
+3. Set it on the agent host — **server-side only, never in client code**:
 
 ```bash
-cp law/cowork-core.md /seu/app/law/cowork-core.md
-# edite: diretório de entregas, provedor de browser, limites
+# .env
+BROWSER_USE_API_KEY=bu_live_...
 ```
 
-**2. Injete a lei no contexto enquanto o modo estiver ativo** (adaptado de [`examples/host-commands.js`](examples/host-commands.js)):
+Your agent's web tool calls `POST https://api.browser-use.com/api/v2/tasks` with header `X-Browser-Use-API-Key` (or uses the `browser-use-sdk`, which reads the env var automatically). Each step returns a screenshot URL at `cdn.browser-use.com` — that's what feeds the panel. Details and alternatives (Playwright, CDP) in [`docs/04-browser-feed.md`](docs/04-browser-feed.md).
+
+**1. Copy the mode law and adjust the paths:**
+
+```bash
+cp law/cowork-core.md /your/app/law/cowork-core.md
+# edit: deliverables directory ($COWORK_DIR), browser tool name, hard limits
+```
+
+**2. Inject the law into context while the mode is active** (adapted from [`examples/host-commands.js`](examples/host-commands.js)):
 
 ```js
 import { buildModeSection } from "./examples/host-commands.js";
 
 const section = buildModeSection({
-  sessionEvents: session.events,          // log durável da sessão
+  sessionEvents: session.events,          // the session's durable log
   readFile: (p) => readFileSync(p, "utf8"),
 });
 const systemPrompt = [basePrompt, section].filter(Boolean).join("\n\n");
-// section === "" quando o modo está desligado
+// section === "" when the mode is off
 ```
 
-**3. Registre os comandos `/cowork` e `/chat`** que apenas gravam um evento `command/run` no log da sessão — o estado é *derivado* deles (veja o porquê em [`docs/02-mode-state.md`](docs/02-mode-state.md)).
+**3. Register the `/cowork` and `/chat` commands** — they only record a `command/run` event in the session log; state is *derived* from them (see why in [`docs/02-mode-state.md`](docs/02-mode-state.md)).
 
-**4. Renderize o painel** ([`examples/cowork-panel.jsx`](examples/cowork-panel.jsx)), alimentado pelo último screenshot que o agente publicou na sessão ([`examples/browser-feed.js`](examples/browser-feed.js)).
+**4. Render the panel** ([`examples/cowork-panel.jsx`](examples/cowork-panel.jsx)), fed by the latest screenshot the agent published in the session ([`examples/browser-feed.js`](examples/browser-feed.js)).
 
-**5. Teste o loop completo:** ative `/cowork` → peça "pesquise X e salve um resumo" → veja os screenshots aparecerem no painel → receba a entrega com a lista de arquivos → `/chat` para sair.
+**5. Test the full loop:** activate `/cowork` → ask "research X and save a summary" → watch screenshots appear in the panel → receive the deliverable with a file list → `/chat` to exit.
 
-## Estrutura do repositório
+## Repository layout
 
 ```
 cowork-schema/
-├── README.md                        ← você está aqui
+├── README.md                        ← you are here
 ├── law/
-│   └── cowork-core.md               ← a lei do modo (protocolo de conduta do agente)
+│   └── cowork-core.md               ← the mode law (agent conduct protocol)
 ├── schema/
-│   ├── cowork-mode.schema.json      ← contrato declarativo de um modo Cowork
-│   └── cowork-mode.example.json     ← config completo de referência (validável contra o schema)
+│   ├── cowork-mode.schema.json      ← declarative contract of a Cowork mode
+│   └── cowork-mode.example.json     ← filled reference config (validatable)
 ├── examples/
-│   ├── host-commands.js             ← Sistemas 1+2: comandos /cowork·/chat + injeção no system prompt
-│   ├── browser-feed.js              ← Sistema 4: extração do feed de screenshots da sessão
-│   └── cowork-panel.jsx             ← Sistema 3: painel (cronômetro + browser ao vivo + input)
+│   ├── host-commands.js             ← Systems 1+2: /cowork·/chat commands + prompt injection
+│   ├── browser-feed.js              ← System 4: screenshot feed extraction from the session
+│   └── cowork-panel.jsx             ← System 3: panel (timer + live browser + input)
 ├── docs/
-│   ├── 01-mode-law.md               ← como escrever e injetar a lei
-│   ├── 02-mode-state.md             ← fold do log de eventos; comandos; persistência
-│   ├── 03-live-panel.md             ← anatomia do painel e padrões de UI
-│   ├── 04-browser-feed.md           ← Browser Use Cloud e alternativas (Playwright, CDP)
+│   ├── 01-mode-law.md               ← how to write and inject the law
+│   ├── 02-mode-state.md             ← event-log fold; commands; persistence
+│   ├── 03-live-panel.md             ← panel anatomy and UI patterns
+│   ├── 04-browser-feed.md           ← Browser Use Cloud setup and alternatives
 │   ├── 05-research.md               ← Claude Cowork · ChatGPT Work · Browser Use Cloud
-│   └── 06-integration-checklist.md  ← checklist + armadilhas de produção
+│   └── 06-integration-checklist.md  ← checklist + production traps
 └── LICENSE                          ← MIT
 ```
 
-## Princípios de design (o porquê de cada decisão)
+## Design principles (the why behind each decision)
 
-1. **Modo é contexto, não mensagem.** A lei entra pelo system prompt a cada montagem de prompt — nunca como mensagem `[MODO ATIVADO]` no histórico, que polui a conversa e se perde em truncamentos.
-2. **Estado é derivado, não armazenado.** O modo ativo é o resultado de um fold sobre o log durável de eventos da sessão. Reload, restart, múltiplas abas — todos convergem para o mesmo estado porque todos leem a mesma fonte.
-3. **O painel é um espelho, não um canal.** Ele lê o que já existe na sessão (screenshots publicados pelas ferramentas) em vez de manter um canal paralelo que pode dessincronizar.
-4. **Limites duros são da lei, não da UI.** "Pedir confirmação antes de destruir" vale mesmo se o usuário acionar o agente por outro caminho (API, CLI), porque está no contexto do modelo.
+1. **Mode is context, not a message.** The law enters through the system prompt on every prompt assembly — never as a `[MODE ACTIVATED]` message in history, which pollutes the conversation and gets lost in truncation.
+2. **State is derived, not stored.** The active mode is the result of a fold over the session's durable event log. Reload, restart, multiple tabs — all converge to the same state because they all read the same source.
+3. **The panel is a mirror, not a channel.** It reads what already exists in the session (screenshots published by tools) instead of maintaining a parallel channel that can desynchronize.
+4. **Hard limits live in the law, not the UI.** "Ask before destroying" holds even if the user triggers the agent through another path (API, CLI), because it's in the model's context.
 
-## Origem
+## Origin
 
-Extraído do plugin `dsh-deepseek-design` (DeepSeek Suite v2.0) para o [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness), onde o modo Cowork rodou em produção: pills `Chat · Design · Cowork` no composer, painel na coluna lateral com browser ao vivo via [Browser Use Cloud](https://cloud.browser-use.com), lei injetada via seção de system prompt e estado derivado do log de eventos. As partes específicas do DSH foram substituídas por interfaces genéricas; as decisões de design e as armadilhas documentadas são as reais.
+Extracted from a production plugin for an agent harness, where Cowork mode ran live: `Chat · Design · Cowork` pills in the composer, a side-column panel with a live browser via [Browser Use Cloud](https://cloud.browser-use.com), the law injected via a system-prompt section, and state derived from the event log. Harness-specific parts were replaced with generic interfaces; the design decisions and documented traps are the real ones.
 
-## Licença
+## License
 
-MIT — use, copie e adapte livremente no seu produto.
+MIT — use, copy and adapt freely in your product.

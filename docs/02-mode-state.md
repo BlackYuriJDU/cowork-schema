@@ -1,77 +1,86 @@
-# Sistema 2 — Mode State (estado derivado do log)
+# System 2 — Mode State (derived, not stored)
 
-## A regra de ouro
+The active mode is **derived from the session's durable event log**, never
+from an in-memory variable. This is the single most important architectural
+decision in the system.
 
-> **Nunca armazene o modo numa variável. Derive-o do log durável da sessão.**
+## The fold
 
-Variáveis dessincronizam: reload da página, restart do servidor, segunda aba aberta, troca de conversa — cada uma é uma chance do botão dizer "Cowork" enquanto o agente acha que está em Chat. O log de eventos da sessão é único, durável e compartilhado por todas as superfícies. Faça dele a fonte da verdade.
-
-## O fold
-
-Cada troca de modo grava um evento no log. Exemplo completo de um log real com os dois comandos:
+Each mode switch records an event in the log. A complete real-world log with
+both commands:
 
 ```json
 [
   { "type": "session/start", "seq": 1,  "ts": "2026-09-23T13:58:02Z" },
-  { "type": "message/user",  "seq": 2,  "ts": "2026-09-23T13:58:40Z", "data": { "text": "pesquise concorrentes de cardápio digital" } },
+  { "type": "message/user",  "seq": 2,  "ts": "2026-09-23T13:58:40Z", "data": { "text": "research digital-menu competitors" } },
   { "type": "command/run",   "seq": 3,  "ts": "2026-09-23T13:58:41Z", "data": { "name": "cowork" } },
   { "type": "tool-result",   "seq": 4,  "ts": "2026-09-23T13:59:10Z", "data": { "tool": "bu_run", "text": "step 1 ok — https://cdn.browser-use.com/screenshots/t1/01.png" } },
   { "type": "command/run",   "seq": 5,  "ts": "2026-09-23T14:02:11Z", "data": { "name": "chat" } }
 ]
 ```
 
-`foldMode` percorre essa lista e devolve `""` (o último comando foi `/chat`). Campos mínimos por evento de comando: `type`, `data.name`, `seq` (ordenação), `ts` (auditoria).
+`foldMode` walks this list and returns `""` (the last command was `/chat`).
+Minimum fields per command event: `type`, `data.name`, `seq` (ordering),
+`ts` (auditing).
 
-O estado atual é o **último** evento relevante — um fold (redução) sobre o log:
+The active mode is the result of folding the log:
 
 ```js
-export function foldMode(events) {
+function foldMode(events) {
   let mode = "";
   for (const event of events) {
     if (event.type !== "command/run") continue;
     const cmd = event.data?.name;
-    if (cmd === "cowork") mode = cmd;      // ativa
-    else if (cmd === "chat") mode = "";    // desativa
+    if (cmd === "cowork") mode = cmd;      // add other modes here
+    else if (cmd === "chat") mode = "";    // /chat clears
   }
   return mode;
 }
 ```
 
-Custo O(n) por montagem de prompt é irrelevante (logs de sessão têm centenas de eventos, não milhões). Se um dia pesar, cacheie por `seq` máximo processado.
+Complete, commented implementation in [`examples/host-commands.js`](../examples/host-commands.js).
 
-## Os comandos
+## Why not a variable / database field
 
-Dois comandos bastam (implementação em [`examples/host-commands.js`](../examples/host-commands.js)):
+| Scenario | Stored state | Derived state (fold) |
+|---|---|---|
+| Page reload | Needs rehydration; may diverge | Recomputed from the same log → identical |
+| Server restart | Lost if in memory | Log survives → state survives |
+| Two tabs on the same session | Two copies to sync | Both read the same source |
+| Audit / debugging | State without history | The log *is* the history |
 
-| Comando | Efeito | Visível no chat? |
-|---------|--------|------------------|
-| `/cowork` | Grava `command/run` com `name: "cowork"` | **Não** (`recordInput: false`) |
-| `/chat` | Grava `command/run` com `name: "chat"` | **Não** |
+This is the same pattern as event sourcing: the log is the source of truth,
+everything else is a projection.
 
-O handler só devolve uma confirmação ("Modo Cowork ativado…"). Toda a mágica acontece porque:
+## The commands
 
-1. o **system prompt** é remontado lendo `foldMode(events)` → a lei entra/sai (Sistema 1);
-2. a **UI** lê o mesmo fold → pills/painel refletem o estado (Sistema 3).
+`/cowork` and `/chat` are real commands of your app's command system, with
+one critical detail: **`recordInput: false`**. The command must not echo into
+the conversation as a message — the log event is enough, and the law's
+injection (System 1) happens via system prompt, invisibly.
 
-## Propriedades que você ganha de graça
-
-- **Reload-safe:** F5 não muda o modo — o log sobrevive.
-- **Restart-safe:** servidor reiniciou? O log persistido reconstrói o estado.
-- **Multi-superfície consistente:** web, API e CLI leem o mesmo log; ninguém diverge.
-- **Auditável:** "quando entrou em Cowork?" é uma query no log.
-- **Por sessão:** cada conversa tem seu log → cada conversa tem seu modo. Trocar de conversa restaura o modo *dela*, não o global.
-
-## Armadilha real (vivemos isso)
-
-Na v2 do plugin, o cliente mantinha `mode` num `let` no bundle do browser e sincronizava com o log "quando possível". Resultado: após reload, o pill mostrava Chat mas o host ainda injetava a lei de Cowork (ou o inverso). A correção da v3 foi apagar a variável e fazer **tudo** — pills, painel, injeção — ler do fold. Se você sentir vontade de "otimizar" guardando o modo em estado local, guarde apenas como *cache derivado* com invalidação pelo log, nunca como fonte.
-
-## Estendendo para mais modos
-
-O fold escala naturalmente — foi assim no DSH com Design e Science:
+The handler does almost nothing — records the event and returns
+acknowledgement:
 
 ```js
-const MODE_COMMANDS = new Set(["design", "cowork", "science"]);
-// último comando de modo vence; /chat zera
+registerCommand({
+  name: "cowork",
+  recordInput: false,                    // ← without this, garbage in the chat
+  handler: () => ({ kind: "success", text: "Cowork mode activated." })
+});
 ```
 
-Cada modo tem sua lei (`LAW_PATHS`), e o mesmo mecanismo injeta a correspondente. Modos são **mutuamente exclusivos por sessão** por construção (o último vence) — se você precisar de modos combináveis, troque o `let mode` por um `Set` com regras explícitas de conflito.
+## Client-side sync
+
+The UI (pills, panel) also derives state from the log — never from its own
+localStorage. When switching conversations, each conversation returns to
+**its own** mode, because the fold runs over that session's log. In-memory
+cache per session is fine as an optimization, as long as the log remains the
+tiebreaker after reload.
+
+## Checklist
+
+- [ ] Session log is durable (survives restart)
+- [ ] Mode commands record `command/run` events with `recordInput: false`
+- [ ] `foldMode` is the only way to know the active mode (host and client)
+- [ ] `/chat` (or equivalent) deactivates by recording an event — not by deleting history

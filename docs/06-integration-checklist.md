@@ -1,58 +1,93 @@
-# Checklist de integração + armadilhas de produção
+# Integration checklist + production traps
 
-Roteiro na ordem em que recomendamos integrar, com o que verificar em cada etapa. No fim, as armadilhas reais que encontramos rodando isso em produção no DSH — para você não repetir.
+Ordered so each step can be verified before moving on. The traps at the end
+are real incidents from the original production deployment.
 
-## Pré-requisitos
+## Integration order
 
-- [ ] Seu agente aceita **system prompt composto por turno** (ou você aceita o fallback de primeira mensagem — veja [`01-mode-law.md`](01-mode-law.md)).
-- [ ] Existe um **log durável de eventos por sessão** (banco, arquivo, event sourcing — qualquer coisa que sobreviva a reload). Sem ele, o Sistema 2 não tem onde se apoiar.
-- [ ] O agente tem uma **ferramenta de navegação web** que devolve texto (tool-result) — é onde as URLs de screenshot vão morar.
-- [ ] Sua UI consegue renderizar um painel lateral e ler o estado da sessão de forma reativa (ou polling).
+### 0. Prerequisites
+- [ ] Your app has an agent with **dynamic system-prompt assembly** (a hook
+      that runs on every prompt build)
+- [ ] A **durable session event log** (survives restart; events have `type`,
+      `data`, `seq`)
+- [ ] A command system (slash commands or equivalent)
+- [ ] `BROWSER_USE_API_KEY` set on the agent host (get one at
+      [cloud.browser-use.com/new-api-key](https://cloud.browser-use.com/new-api-key))
+      — or an alternative browser provider wired (see
+      [`04-browser-feed.md`](04-browser-feed.md))
 
-## Etapa 1 — Lei (30 min)
+### 1. Mode Law
+- [ ] Copy `law/cowork-core.md`, adjust paths and tool names
+- [ ] Prompt builder injects `header + law` when `foldMode(events) === "cowork"`
+- [ ] Verify: activate the mode, ask "what rules are you following?" — the
+      agent should cite the law without any visible message in the chat
 
-- [ ] Copie `law/cowork-core.md` e ajuste: diretório de entregas, nome da ferramenta de browser, lista de ações destrutivas do SEU domínio.
-- [ ] Defina o cabeçalho de injeção ("isto NÃO é mensagem do usuário…").
-- [ ] Teste manualmente: monte um prompt com a lei e verifique que o modelo narra passos e lista arquivos no fim.
+### 2. Mode State
+- [ ] `/cowork` and `/chat` registered with `recordInput: false`
+- [ ] Each command appends a `command/run` event to the session log
+- [ ] `foldMode` is the only source of truth (host and client)
+- [ ] Verify: activate, reload the page — mode (and panel) must come back
 
-## Etapa 2 — Estado e comandos (1–2 h)
+### 3. Live Panel
+- [ ] Timer starts with the mode; reset doesn't leave the mode
+- [ ] `<img key={url}>` with `object-fit: contain`
+- [ ] Steer input: first message plain, iterations with `[COWORK ITERATION]`
+- [ ] Close button fires `/chat`
+- [ ] Verify: the whole loop end-to-end (see README quickstart, step 5)
 
-- [ ] Implemente o evento `command/run` no log da sessão (tipo, `data.name`, `seq`, `ts`).
-- [ ] Registre `/cowork` e `/chat` com `recordInput: false` — handlers só confirmam.
-- [ ] Implemente `foldMode(events)` e use-o em **dois** lugares: montagem do system prompt e UI.
-- [ ] Teste: ative, dê F5, confirme que o modo continua ativo; `/chat`, F5 de novo, confirme que desligou.
+### 4. Browser Feed
+- [ ] Web tool publishes a screenshot URL per step
+- [ ] Extraction scans tool-results, not just assistant text
+- [ ] Verify: ask the agent to navigate somewhere; the panel updates at
+      each step
 
-## Etapa 3 — Feed de browser (2–4 h)
+## Production traps (all real)
 
-- [ ] Escolha o provedor: Browser Use Cloud (rápido) ou Playwright self-host (controle).
-- [ ] Garanta que a ferramenta devolve a URL do screenshot **no tool-result, como texto**.
-- [ ] Implemente `extractLatestScreenshot()` com o regex do seu provedor (`browserFeed.urlPattern`).
-- [ ] Teste: rode uma navegação e veja a URL aparecer no histórico da sessão.
+1. **Stateful regex.** `extractLatestScreenshot` uses a `/g` regex. Declared
+   at module level, `lastIndex` persists between calls and every other
+   extraction returns `null`. Keep the regex literal inside the function.
 
-## Etapa 4 — Painel (2–4 h)
+2. **Command echoing into chat.** Without `recordInput: false`, every
+   `/cowork` appears as a user message, pollutes the context and teaches the
+   model that mode switching is conversation.
 
-- [ ] Renderize `cowork-panel.jsx` (ou equivalente no seu framework) no slot `sidebar-right`.
-- [ ] Alimente `shotUrl` a partir da sessão (reativo ou polling de 1s).
-- [ ] Ligue o steer input ao envio de prompt em queue na sessão, com prefixo `[COWORK ITERAÇÃO]` quando a tarefa já estiver rodando.
-- [ ] Adicione os pills `Chat · Cowork` à esquerda do composer, executando os comandos reais (não mutação local).
-- [ ] Teste o loop completo do README, ponta a ponta.
+3. **Client command colliding with host command.** If your architecture has
+   host-side and client-side command registries, registering `/cowork` on
+   both fails loudly. The client should *decorate/invoke* the host command,
+   never re-register it.
 
-## Etapa 5 — Endurecimento
+4. **`role="tablist"` on mode pills.** Global stylesheets (yours, a
+   framework's, another plugin's) may restyle or hide tablists. In
+   production, a style reset from an unrelated plugin had
+   `[role="tablist"]{display:none!important}` — it would have killed the
+   pills. Use `role="group"`.
 
-- [ ] URLs de screenshot assinadas com expiração curta.
-- [ ] Lei revisada para segredos (seção 4) — screenshots podem vazar dados de sessões logadas.
-- [ ] Métricas: tempo de tarefa (o cronômetro já dá), taxa de confirmações destrutivas pedidas vs. concedidas.
-- [ ] (Opcional) `deliverablesList`: extraia caminhos absolutos citados e renderize lista clicável.
+5. **Editing config files as text.** The original installer once corrupted a
+   YAML registry by string-editing it. The rule that came out of the
+   incident: parse → modify the tree → serialize → **re-parse to validate** →
+   write atomically with a timestamped backup.
 
-## Armadilhas reais (cada uma custou um debug)
+6. **Restoring layout by re-querying the DOM.** When the panel overrides the
+   app grid, keep the frame *reference* and the original grid value. A
+   version that searched for the frame again with a regex (which no longer
+   matched the overridden style) left the layout stuck with a ghost column
+   forever.
 
-1. **Estado em variável local.** Na v2, `mode` vivia num `let` no browser: após reload, pill e system prompt divergiam. Correção: tudo lê do fold. Não "sincronize" estado — derive.
-2. **Lei como mensagem `[MODO ATIVADO]` no chat.** Polui o histórico e some em truncamento. Correção: seção de system prompt reavaliada por turno.
-3. **Comando que ecoa no chat.** Se `/cowork` aparece como mensagem do usuário, o modelo às vezes "responde" ao comando em vez de trabalhar. Correção: `recordInput: false`.
-4. **Regex `/g` reutilizado.** `lastIndex` persiste entre chamadas — a extração funciona uma vez e falha na seguinte. Correção: clonar o regex (`new RegExp(source, flags)`) a cada uso.
-5. **Pills com `role="tablist"`.** Outro plugin nosso escondia tablists via CSS global e os pills sumiam. Correção: `role="group"` — e, semanticamente, são botões de modo mesmo.
-6. **Painel como canal paralelo.** Qualquer estado que o painel mantém por conta própria (em vez de ler da sessão) dessincroniza em reload/segunda aba. Correção: painel-espelho.
-7. **Fallback que sobrescreve o rascunho.** Em sessão em branco, semear a lei no composer **substituindo** o que o usuário já tinha digitado. Correção: sempre concatenar, nunca substituir.
-8. **Um passo gigante em vez de muitos pequenos.** O agente fazia a navegação inteira numa chamada só: 1 screenshot no fim, painel "congelado" por minutos. Correção: regra na lei — muitos passos pequenos, 1 foto por passo.
-9. **Confundir fechar o painel com sair do modo.** São ortogonais: Esc fecha o painel; só `/chat` desliga a lei. Deixe isso claro na UI (tooltip) ou o usuário achará que saiu do modo quando só fechou a janela.
-10. **YAML editado como texto.** (Bônus do instalador do plugin original.) Qualquer arquivo de config estruturado: parse → modifica árvore → serializa → **valida o parse antes de gravar** → grava com backup. Nunca sed/regex em YAML.
+7. **Law as a user message.** The v1 fallback seeded the law into the
+   composer draft. Besides being visible and editable, it *replaced* the
+   user's existing draft. If you need a fallback for hosts without command
+   support, **concatenate** — never replace.
+
+8. **Panel opening before the layout exists.** On a blank session the side
+   column may not exist yet; opening the panel throws. Catch it, mark
+   `pendingAutoOpen`, and open when the first message arrives. The mode must
+   work without the panel — the law is already in context.
+
+9. **Interrupting the agent on every steer.** Send steering with queue
+   semantics. Interrupt mid-step and you lose the step's work (and its
+   screenshot).
+
+10. **Leaking the API key.** `BROWSER_USE_API_KEY` stays server-side; the
+    client only ever sees public `cdn.browser-use.com` screenshot URLs. The
+    law forbids the agent from echoing secrets — but also grep your bundle
+    for the key before shipping.

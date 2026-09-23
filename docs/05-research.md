@@ -1,75 +1,97 @@
-# Pesquisa — o estado da arte dos "coworks"
+# Research — how the market implements "Cowork"
 
-Levantamento (set/2026) de como os produtos de referência implementam cada sistema deste schema. Serve para calibrar suas escolhas — e para não reinventar erros alheios.
+This document maps how the three references implement each system, with
+sources. Use it to calibrate your own design decisions.
 
 ## Claude Cowork (Anthropic)
 
-O produto que definiu a categoria e a inspiração direta do nosso plugin.
+Launched January 12, 2026 as a macOS research preview for Max subscribers;
+pitched as "Claude Code's agentic pattern applied to non-technical work."
+Reached GA on macOS/Windows in April 2026, web and mobile in July 2026 —
+with the key architectural change of **remote execution**: sessions run in
+an isolated cloud sandbox and continue after the laptop closes.
 
-**Linha do tempo:**
-- **12/jan/2026** — lançado como research preview no macOS para assinantes Max: "Claude Code para quem não vive no terminal".
-- **09/abr/2026** — GA no macOS e Windows.
-- **07/jul/2026** — expansão para web e mobile com mudança arquitetural grande: execução passa a ser **remota** (cloud sandbox da Anthropic); o laptop não precisa mais ficar acordado.
-- **16/set/2026** — a Anthropic **fundiu Cowork e chat num só produto**: o toggle desaparece e o roteamento (resposta rápida vs. tarefa longa) passa a ser automático. Motivo declarado: "a parte frustrante era decidir onde a tarefa pertencia".
+Key traits:
 
-**Como implementa cada sistema:**
+- **Tasks and Projects**: units of work (on demand or scheduled) inside
+  persistent workspaces with their own files, instructions and memory.
+- **Running trace**: every file opened and every tool called is visible to
+  the user — the transparency our panel embodies with screenshots.
+- **Sub-agents**: large jobs split into parallel chunks that report back.
+- **Connectors + MCP + computer use** ("Dispatch"): drives a real screen
+  when no direct integration exists.
+- **Guardrails**: e-mail sending is off by default, admin-gated, with an
+  "agent-initiated" attribution header — the same philosophy as our law's
+  hard limits.
+- **The September 2026 twist**: Anthropic merged Cowork into the main chat
+  and **removed the toggle** — the model now routes automatically between
+  quick answer and long-running task. Their stated reason: users found
+  "deciding where a task belonged" the frustrating part. Lesson: an explicit
+  toggle (this repo) and automatic routing are both valid answers; if you
+  keep the toggle, make the mode obvious and the switch lossless.
 
-| Sistema | Implementação deles |
-|---------|--------------------|
-| Mode Law | "Global instructions" (Settings > Cowork) + instruções de projeto; modos de permissão **Manual / Auto / Skip** — Manual pergunta antes de agir, Auto aprova leituras e decide sobre escritas, Skip pula prompts (só automação de baixo risco). Deleção permanente sempre exige confirmação explícita. |
-| Mode State | Toggle Cowork no composer (canto inferior esquerdo) — exatamente o padrão de pills que copiamos. Depois da fusão: roteamento invisível, sem estado explícito. |
-| Live Panel | **Running trace**: lista visível de cada arquivo aberto e cada tool call — transparência como diferencial ("você vê o raciocínio, não só o resultado"). Sub-agentes em paralelo para jobs grandes. |
-| Browser Feed | Browser embutido + "computer use" (marca *Dispatch*): o Claude dirige uma tela real quando não há integração direta. |
-
-**Lições:**
-1. O toggle explícito funciona, mas gera carga de decisão — a Anthropic concluiu que roteamento automático é o destino. Se você mantiver o toggle (este schema mantém), minimize o custo: pills no composer, não uma aba longe.
-2. Permissões graduadas (Manual/Auto/Skip) são o controle real de segurança — mais granular que nossa "confirmação para destrutivos". Considere evoluir a lei nessa direção.
-3. O trace visível do trabalho é o que diferencia "agente" de "caixa preta".
+Sources: Anthropic announcements via
+[The Verge / coverage roundup](https://xda-developers.com/anthropic-merges-claude-cowork-and-chat-into-one-singular-claude),
+[usecarly.com](https://usecarly.com/blog/what-is-claude-cowork),
+[macmyths.com](https://macmyths.com/anthropic-launches-cowork-a-claude-desktop-agent-that-works-in-your-files-no-coding-required),
+[smithstephen.com](https://smithstephen.com/p/claude-stopped-asking-which-mode).
 
 ## ChatGPT Work (OpenAI)
 
-A resposta da OpenAI, lançada **09/jul/2026** junto com o GPT-5.6, fundindo Codex ao app desktop: três modos — **Chat · Work · Codex**.
+Launched July 9, 2026 alongside GPT-5.6, as the middle mode of a three-mode
+desktop app (**Chat · Work · Codex**) — a direct answer to Claude Cowork.
 
-| Sistema | Implementação deles |
-|---------|--------------------|
-| Mode Law | Mesmo agente GPT-5.6-classe do Codex com system prompt diferente por modo (descoberta da comunidade r/codex: "é o mesmo agente, Work só aponta para docs e esconde o código") — validação independente do padrão *lei como contexto*. |
-| Mode State | Mode switcher no app unificado; modos compartilham plugins e contexto dentro de um projeto; troca de modo no meio da thread. |
-| Live Panel | Computer Use com **overlay picture-in-picture** ao vivo: você assiste o agente clicar/digitar e pode pausar/aprovar do overlay. Confirmação explícita antes de pagamentos e logins. |
-| Browser Feed | Browser embutido + 1.400+ conectores (Slack, Drive, SharePoint, CRM, e-mail); `@menções` direcionam contexto de um app específico. Saídas: arquivos Office editáveis e *Sites* (mini webapps hospedados). |
+Key traits:
 
-**Lições:**
-1. "Mesmo motor, leis diferentes por modo" é exatamente a arquitetura deste schema — não é excentricidade nossa.
-2. O PiP ao vivo com pausa/aprovação é o estado da arte de supervisão; nosso painel de screenshots é a versão leve disso.
-3. Work é web-first (conectores SaaS), Cowork era files-first. Escolha o centro de gravidade do SEU produto antes de escrever a lei.
+- **Loop pattern productized**: describe a goal → Work gathers context from
+  connected apps → decomposes into subtasks → executes for hours → delivers
+  finished files (spreadsheets, decks, docs) or hosted mini-apps ("Sites").
+- **Web-first**: center of gravity is browsing, forms and SaaS orchestration
+  via 1,400+ connectors; local file access only on desktop.
+- **@ mentions**: the user explicitly points Work at a connected app
+  mid-task — a steering convention comparable to our `[COWORK ITERATION]`
+  prefix.
+- **Background execution with check-ins**: only surfaces questions that
+  genuinely require user judgment.
+- **Computer use (CUA)** on desktop: clicks, types and moves files across
+  local apps.
+
+Sources: [OpenAI launch coverage](https://linkedin.com/pulse/openai-launches-new-chatgpt-work-app-compete-claude-cowork-eric-eden-uumze),
+[tarekalaaddin.com comparison](https://tarekalaaddin.com/blog/chatgpt-work-vs-claude-cowork),
+[spicyadvisory.com](https://spicyadvisory.com/blog/chatgpt-work-gpt-5-6-business-guide-2026).
 
 ## Browser Use Cloud
 
-A infraestrutura de browser que usamos em produção no DSH (Sistema 4).
+The infrastructure our System 4 builds on. Hosted browser automation:
+stealth browsers, proxy rotation, CAPTCHA handling, parallel execution —
+and, critically for the panel, **hosted screenshots per step** plus a
+`liveUrl` stream per session.
 
-- **O que é:** API hospedada de automação de browser para agentes — tasks em linguagem natural, browsers stealth na nuvem, screenshots por passo, live URL para streaming.
-- **API:** base `https://api.browser-use.com/api/v2` (e v3); header `X-Browser-Use-API-Key`; chave em <https://cloud.browser-use.com/new-api-key>.
-- **SDKs:** `browser-use-sdk` (Python e TypeScript); também biblioteca open-source (`browser-use`, Python ≥3.11) para self-host com `use_cloud=True` opcional.
-- **Extras relevantes:** rotação de proxy residencial, resolução de CAPTCHA, perfis persistentes, CDP WebSocket (`wss://connect.browser-use.com`), 1.000+ integrações.
-- **Quando trocar:** se precisar de controle total (compliance, dados que não podem sair), self-host Playwright + seu storage — o contrato do feed (URL de imagem no tool-result) não muda.
+- REST API: `https://api.browser-use.com/api/v2` (and v3), auth via
+  `X-Browser-Use-API-Key`.
+- SDKs: `browser-use-sdk` (Python and TypeScript); the open-source
+  `browser-use` library can run its agent against cloud browsers with
+  `Browser(use_cloud=True)`.
+- API keys: [cloud.browser-use.com/new-api-key](https://cloud.browser-use.com/new-api-key).
+- Used in production by teams like Amazon, Salesforce, Composio and Manus
+  (per their site).
 
-## Tabela-síntese
+Sources: [cloud.browser-use.com](https://cloud.browser-use.com),
+[docs.browser-use.com](https://docs.browser-use.com),
+[github.com/browser-use/browser-use](https://github.com/browser-use/browser-use).
 
-| Peça | Claude Cowork | ChatGPT Work | Este schema |
-|------|---------------|--------------|-------------|
-| Conduta do agente | Global instructions + permissões Manual/Auto/Skip | System prompt por modo | `law/cowork-core.md` injetada no system prompt |
-| Estado do modo | Toggle (depois: roteamento automático) | Mode switcher | Fold do log de eventos (`command/run`) |
-| Visibilidade | Running trace de tools/arquivos | PiP ao vivo do desktop | Painel com screenshots do browser |
-| Navegação | Browser embutido + Dispatch | Browser + 1.400 conectores | Browser Use Cloud (ou self-host) |
-| Entregas | Arquivos + Live Artifacts | Office files + Sites | Diretório por tarefa + lista final |
+## Comparison table
 
-## Fontes
+| Concern | Claude Cowork | ChatGPT Work | This schema |
+|---|---|---|---|
+| Mode activation | Toggle (later: auto-routing) | Explicit mode tab | Explicit command (`/cowork`) |
+| Behavior contract | System-level, opaque | System-level, opaque | **Open law file you own** |
+| Progress visibility | Running trace of tools/files | Background + check-ins | Live screenshot panel |
+| Browser | Built-in + computer use | Built-in (CUA) | Browser Use Cloud (swappable) |
+| State | Cloud sessions | Cloud sessions | Derived from event log (fold) |
+| Deliverables | Files in granted folders | Office files, Sites | Convention: `$COWORK_DIR/<date>-<slug>/` |
+| Destructive actions | Permission modes (Manual/Auto) | Check-ins | Hard limits in the law |
 
-- Anthropic — anúncio da fusão Cowork/chat e help center (set/2026), via The Verge, Simon Willison, smithstephen.com/p/claude-stopped-asking-which-mode
-- usecarly.com/blog/what-is-claude-cowork — linha do tempo e arquitetura remota
-- macmyths.com — modos de permissão Manual/Auto/Skip e funcionamento local↔nuvem
-- datacamp.com/blog/chatgpt-work-vs-claude-cowork — comparação de working style
-- tarekalaaddin.com/blog/chatgpt-work-vs-claude-cowork — web-first vs files-first
-- explainx.ai — descobertas r/codex: mesmo agente, system prompts por modo
-- dev.to/max_quimby — overlay PiP do Computer Use no ChatGPT Work
-- github.com/browser-use/browser-use — README: SDK, cloud vs open-source, stealth/proxies
-- awesomeskills.dev (browser-use cloud skill) — base URLs da API v2/v3, header de auth, CDP WebSocket
+The differentiator of this schema is not capability — it's **ownership**:
+every rule is a file in your repo, every state transition is an event in
+your log, every pixel in the panel comes from your session.

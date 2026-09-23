@@ -1,154 +1,169 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/BlackYuriJDU/cowork-schema/blob/main/schema/cowork-mode.schema.json",
-  "title": "Cowork Mode Definition",
-  "description": "Configuração declarativa de um modo Cowork: lei, comandos, painel e feed de browser. Valide seu arquivo de config contra este schema antes de carregar no seu app.",
+  "title": "Cowork Mode",
+  "description": "Declarative configuration of a Cowork mode: law, commands, panel and browser feed. Validate your config file against this schema before loading it into your app.",
   "type": "object",
-  "required": ["mode", "law", "commands", "panel"],
-  "additionalProperties": false,
+  "required": ["mode", "law", "deliverables"],
   "properties": {
     "mode": {
       "type": "object",
       "required": ["id", "label"],
-      "additionalProperties": false,
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*$",
-          "description": "Identificador estável do modo (usado no log de eventos e nos comandos)."
+          "description": "Stable mode identifier (used in the event log and commands)."
         },
         "label": {
           "type": "string",
-          "minLength": 1,
-          "description": "Rótulo exibido na UI (pill, aba, menu)."
+          "description": "Label shown in the UI (pill, tab, panel header)."
         },
         "icon": {
           "type": "string",
-          "description": "Nome do ícone da sua biblioteca (ex.: 'monitor', 'orbit')."
+          "description": "Icon identifier in your app's icon set (e.g. 'monitor')."
         },
         "description": {
           "type": "string",
-          "description": "Texto curto explicando o modo (tooltip / ajuda)."
+          "description": "Short text explaining the mode (tooltip / help)."
+        },
+        "activateCommand": {
+          "type": "string",
+          "default": "cowork",
+          "description": "Slash command name (without '/') that activates the mode."
+        },
+        "deactivateCommand": {
+          "type": "string",
+          "default": "chat",
+          "description": "Slash command name (without '/') that deactivates the mode."
         }
       }
     },
     "law": {
       "type": "object",
-      "required": ["source", "injection"],
-      "additionalProperties": false,
+      "required": ["path"],
       "properties": {
-        "source": {
+        "path": {
           "type": "string",
-          "description": "Caminho ou URL do markdown com a lei do modo (ex.: law/cowork-core.md)."
+          "description": "Path or URL of the markdown with the mode law (e.g. law/cowork-core.md)."
         },
         "header": {
           "type": "string",
-          "description": "Cabeçalho prefixado à lei na injeção, deixando claro que NÃO é mensagem do usuário."
+          "description": "Header prefixed to the law on injection, making clear it is NOT a user message."
         },
         "injection": {
           "type": "string",
-          "enum": ["system-prompt-section", "first-message", "tool-result"],
-          "description": "Onde a lei entra. 'system-prompt-section' é o recomendado (reavaliado a cada montagem de prompt); os demais são fallbacks para hosts sem system prompt dinâmico."
+          "enum": ["system-prompt-section", "system-prompt-static", "first-message-fallback"],
+          "default": "system-prompt-section",
+          "description": "Where the law goes. 'system-prompt-section' is recommended (re-evaluated on every prompt assembly); the others are fallbacks for hosts without a dynamic system prompt."
         }
       }
     },
     "commands": {
       "type": "object",
-      "required": ["activate", "deactivate", "eventType"],
-      "additionalProperties": false,
       "properties": {
         "activate": {
           "type": "string",
-          "pattern": "^/[a-z][a-z0-9-]*$",
-          "description": "Comando que ativa o modo (ex.: /cowork). Deve gravar um evento no log da sessão."
+          "default": "cowork",
+          "description": "Command that activates the mode (e.g. /cowork). Must record an event in the session log."
         },
         "deactivate": {
           "type": "string",
-          "pattern": "^/[a-z][a-z0-9-]*$",
-          "description": "Comando que desativa (ex.: /chat). Também grava evento — o estado é derivado do último."
+          "default": "chat",
+          "description": "Command that deactivates the mode (e.g. /chat)."
         },
         "eventType": {
           "type": "string",
-          "description": "Tipo do evento durável que registra a troca de modo (ex.: 'command/run')."
+          "default": "command/run",
+          "description": "Type of the durable event that records the mode switch (e.g. 'command/run')."
         },
         "recordInput": {
           "type": "boolean",
           "default": false,
-          "description": "Se false, o comando não ecoa como mensagem visível no chat — o log já é a fonte da verdade."
+          "description": "MUST be false: the command must not echo into the conversation as a message."
         }
       }
     },
     "panel": {
       "type": "object",
-      "required": ["slot", "features"],
-      "additionalProperties": false,
       "properties": {
-        "slot": {
+        "placement": {
           "type": "string",
-          "enum": ["sidebar-right", "sidebar-left", "bottom", "full-overlay"],
-          "description": "Onde o painel do modo é renderizado."
+          "enum": ["side-column", "full-screen", "bottom-sheet", "separate-window"],
+          "default": "side-column",
+          "description": "Where the mode panel is rendered."
         },
-        "features": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "taskTimer": {
-              "type": "boolean",
-              "default": true,
-              "description": "Cronômetro da tarefa (mm:ss), zerado a cada nova tarefa."
-            },
-            "liveBrowser": {
-              "type": "boolean",
-              "default": true,
-              "description": "Exibe o último screenshot publicado pelo agente (object-fit: contain, tela cheia do painel)."
-            },
-            "steerInput": {
-              "type": "boolean",
-              "default": true,
-              "description": "Caixa de texto no rodapé do painel para direcionar a tarefa sem sair do modo."
-            },
-            "deliverablesList": {
-              "type": "boolean",
-              "default": false,
-              "description": "Lista os arquivos citados pelo agente como entregas (extraídos do texto da sessão)."
-            }
-          }
+        "timer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the task timer (mm:ss) in the panel header."
+        },
+        "liveBrowser": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the latest screenshot published by the agent (object-fit: contain, panel full-bleed)."
+        },
+        "steerInput": {
+          "type": "boolean",
+          "default": true,
+          "description": "Text box in the panel footer to steer the task without leaving the mode."
+        },
+        "iterationPrefix": {
+          "type": "string",
+          "default": "[COWORK ITERATION]",
+          "description": "Prefix added to steering messages after the first one."
+        },
+        "deliverablesList": {
+          "type": "boolean",
+          "default": true,
+          "description": "List files cited by the agent as deliverables (extracted from session text)."
+        },
+        "objectFit": {
+          "type": "string",
+          "enum": ["contain", "cover"],
+          "default": "contain",
+          "description": "Fit of the screenshot inside the panel. 'contain' shows the whole capture."
         }
       }
     },
-    "browserFeed": {
+    "browser": {
       "type": "object",
-      "additionalProperties": false,
       "properties": {
         "provider": {
           "type": "string",
-          "enum": ["browser-use-cloud", "playwright", "cdp-screenshot", "custom"],
-          "description": "Quem produz os screenshots da navegação do agente."
+          "enum": ["browser-use-cloud", "playwright", "puppeteer", "cdp", "custom"],
+          "default": "browser-use-cloud",
+          "description": "Provider of the browser the agent operates."
         },
-        "urlPattern": {
+        "apiKeyEnv": {
           "type": "string",
-          "description": "Regex (string) para extrair URLs de screenshot do texto da sessão. Default do Browser Use Cloud: https://cdn\\.browser-use\\.com/screenshots/[^\\s\"'\\\\)]+"
+          "default": "BROWSER_USE_API_KEY",
+          "description": "Name of the environment variable holding the provider API key (server-side only)."
+        },
+        "screenshotUrlPattern": {
+          "type": "string",
+          "description": "Regex (as string) matching screenshot URLs in session text."
         },
         "pollIntervalMs": {
           "type": "integer",
           "minimum": 250,
           "default": 1000,
-          "description": "Intervalo de atualização do painel quando o feed é por polling (alternativa: reativo por evento de sessão)."
+          "description": "Panel refresh interval when the feed is polling-based (alternative: reactive on session events)."
         }
       }
     },
     "deliverables": {
       "type": "object",
-      "additionalProperties": false,
+      "required": ["directoryTemplate"],
       "properties": {
         "directoryTemplate": {
           "type": "string",
-          "description": "Template do diretório de entregas (ex.: 'cowork/<AAAA-MM-DD>-<slug>/'). Deve bater com a lei."
+          "description": "Deliverables directory template (e.g. '$COWORK_DIR/<YYYY-MM-DD>-<slug>/'). Must match the law."
         },
         "absolutePaths": {
           "type": "boolean",
           "default": true,
-          "description": "Exigir caminhos absolutos nas entregas (o painel consegue linkar/listar)."
+          "description": "Require absolute paths in deliverables (lets the panel link/list them)."
         }
       }
     }

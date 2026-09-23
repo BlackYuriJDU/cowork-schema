@@ -1,60 +1,86 @@
-# Sistema 3 — Live Panel (o painel ao vivo)
+# System 3 — Live Panel
 
-O painel é o que transforma "agente trabalhando" em experiência: sem ele, o usuário olha um spinner; com ele, o usuário **assiste o trabalho**. Componente de referência: [`examples/cowork-panel.jsx`](../examples/cowork-panel.jsx).
+The panel is where the user *watches* the agent work. Complete reference
+implementation in [`examples/cowork-panel.jsx`](../examples/cowork-panel.jsx).
 
-## Anatomia
+## Anatomy
 
 ```
-┌──────────────────────────────────────┐
-│ ◎ Cowork        04:32   ↺   ✕        │  header
-├──────────────────────────────────────┤
-│                                      │
-│        browser ao vivo (img)         │  stage
-│                                      │
-├──────────────────────────────────────┤
-│ [ Próximo passo da tarefa… ] [Enviar]│  footer (steer input)
-└──────────────────────────────────────┘
+┌────────────────────────────────────┐
+│ ◎ Cowork        04:32   ↺   ✕      │  header: title + timer + reset + close
+├────────────────────────────────────┤
+│                                    │
+│         [ live screenshot ]        │  body: latest capture, object-fit: contain
+│      or empty-state message        │
+│                                    │
+├────────────────────────────────────┤
+│ [ Next step of the task…  ] [Send] │  footer: steer input
+└────────────────────────────────────┘
 ```
 
 ### Header
-- **Título + ícone** do modo (monitor/órbita — algo que diga "trabalho", não "conversa").
-- **Cronômetro mm:ss** da tarefa. Parece decorativo, não é: dá escala de tempo ao trabalho autônomo e ancora a paciência do usuário. Começa no primeiro evento da tarefa; o botão ↺ zera (nova tarefa).
-- **✕ fecha o painel** (Esc também). Importante: fechar o painel **não** desativa o modo — a lei continua no contexto. Modo e painel são ortogonais.
 
-### Stage (browser ao vivo)
-- Uma `<img>` com a **última URL de screenshot** extraída da sessão (Sistema 4).
-- `object-fit: contain` em 100% do painel: a captura inteira visível, como um monitor. Nada de crop.
-- `key={shotUrl}`: troca de URL monta imagem nova — evita flicker de cache.
-- Estado vazio importa: *"quando o agente navegar por você, a tela aparece aqui"* ensina o que esperar.
+- **Task timer** (`mm:ss`, `tabular-nums` so it doesn't jitter): gives a sense
+  of progress on long tasks. Starts when the mode is activated.
+- **Reset button (↺)**: "new task" — zeroes the timer without leaving the mode.
+- **Close (✕, also Esc)**: returns to chat mode — and must fire the `/chat`
+  command, not just hide the panel (otherwise the law keeps applying with no
+  visible UI).
 
-### Footer (steer input)
-- Caixa de texto que envia direcionamento **sem sair do modo**: primeira mensagem = a tarefa; seguintes levam prefixo `[COWORK ITERAÇÃO]` para o agente distinguir ajuste de tarefa nova.
-- Placeholders que mudam com o estado ("Descreva a tarefa…" → "Próximo passo…") guiam sem tutorial.
+### Body — live browser
 
-## Princípio: o painel é um espelho
+An `<img>` fed by the **latest screenshot URL published in the session**
+(System 4). Three non-obvious decisions:
 
-O painel **não tem canal próprio** com o agente. Ele lê o que já está na sessão (screenshots nos tool-results) e escreve na sessão (prompts em queue). Consequência: painel fechado, painel reaberto, segunda aba — todos veem a mesma coisa, porque todos leem a mesma sessão.
+1. **`key={shot}` on the `<img>`** — forces React to remount the element when
+   the URL changes, avoiding a flicker of the old image over the new one.
+2. **`object-fit: contain`** — the whole capture is always visible; cropping
+   (`cover`) would hide exactly what the user wants to supervise.
+3. **The panel is a mirror, not a channel** — it reads what the tools already
+   published in the session instead of opening a parallel WebSocket that
+   could desynchronize. If the screenshot is in the session log, the panel
+   shows it; if it isn't, it doesn't.
 
-## Onde renderizar
+### Footer — steer input
 
-| Slot | Quando usar |
-|------|-------------|
-| `sidebar-right` | Default. Chat comprime, painel ocupa a lateral — foi o layout de produção no DSH. |
-| `full-overlay` | Foco total na tarefa (bom para mobile). |
-| `bottom` | Funciona, mas screenshots de browser são verticais — desperdiça área. |
+- **First message** (no screenshot yet): goes in plain — the law is already
+  in context via System 1, no kickoff prefix needed.
+- **Subsequent messages**: prefixed with `[COWORK ITERATION]` so the agent
+  distinguishes steering from a new task.
+- Sent with queue semantics (`"queue"`), not interrupt — the agent finishes
+  the current step before incorporating the steering.
 
-No DSH, o painel ocupava a coluna nativa de detalhes com **geometria invertida**: chat estreito (340px) e painel com o resto — o browser ao vivo é o protagonista, o chat vira narração. Se o seu layout permitir, prefira isso a um painel apertado.
+## Placement in the layout
 
-## Seletor de modo (pills)
+In the original implementation the panel lives in the app's native side
+column and, when open, the grid is inverted: chat shrinks to ~340px and the
+panel takes the rest — the work is the protagonist, the conversation becomes
+secondary. Two lessons:
 
-O padrão consagrado (Claude Cowork, e o nosso plugin) são **pills à esquerda do composer**: `Chat · Cowork` (o DSH tinha `Chat · Design · Cowork`).
+1. **Persist and restore the original grid.** Keep the frame *reference* (not
+   the result of a new query) and the last native grid value; restore on
+   close. An earlier version searched for the frame again with a regex that
+   no longer matched the overridden style — the layout got stuck forever.
+2. **Reaffirm with `MutationObserver`** on the frame's `style` attribute:
+   native re-renders (drag, resize) will try to restore the original grid
+   while the panel is open.
 
-Detalhes de implementação que importam:
+## Accessibility and details
 
-- **`role="group"`, não `role="tablist"`.** No nosso caso, outro plugin escondia tablists via CSS e aposentaria os pills. Além disso, semanticamente são botões de modo, não abas de conteúdo.
-- **Escolher um pill executa o comando real** (`/cowork`), não uma mutação local de estado — assim UI e contexto nunca divergem (Sistema 2).
-- **Cada conversa lembra seu modo.** Ao trocar de chat, sincronize o seletor com o fold daquela sessão.
+- Mode pills with `role="group"`, **not** `role="tablist"` — global
+  accessibility stylesheets and some UI frameworks treat tablists specially
+  (in our case, a style reset from another plugin hid every `tablist` on the
+  page, which would have killed the pills).
+- Panel entrance animation of ~280ms, disabled under
+  `prefers-reduced-motion`.
+- Empty state with explanatory text ("the live browser will appear here when
+  the agent navigates") — never a blank area.
 
-## Feature opcional: lista de entregas
+## Checklist
 
-A lei manda o agente citar arquivos com caminho absoluto; [`browser-feed.js`](../examples/browser-feed.js) tem `extractDeliverablePaths()` para extrair esses caminhos do texto da sessão e renderizar uma lista clicável no painel. Está desligada por default no schema (`panel.features.deliverablesList`) porque exige disciplina de formato da lei — ligue quando a sua estiver madura.
+- [ ] Timer starts with the mode and resets without leaving it
+- [ ] Closing the panel fires `/chat` (law stops applying)
+- [ ] `<img key={url}>` + `object-fit: contain`
+- [ ] First message without prefix; iterations with `[COWORK ITERATION]`
+- [ ] Original grid restored on close (via stored reference)
+- [ ] Pills with `role="group"`

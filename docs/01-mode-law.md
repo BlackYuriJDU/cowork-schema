@@ -1,56 +1,66 @@
-# Sistema 1 — Mode Law (a lei do modo)
+# System 1 — Mode Law
 
-A **lei** é o coração do Cowork: um documento markdown curto que define a conduta do agente enquanto o modo estiver ativo. Sem ela, "modo Cowork" é só um botão que não muda nada.
+The **law** is the behavioral contract of Cowork mode: a markdown document
+injected into the agent's context **on every prompt assembly** while the mode
+is active. The canonical version lives in [`law/cowork-core.md`](../law/cowork-core.md).
 
-## O arquivo
+## Why a "law" and not a prompt
 
-[`law/cowork-core.md`](../law/cowork-core.md) — 5 seções, ~30 linhas. Esse tamanho é deliberado: a lei entra no contexto de **todo** turno, então cada linha paga aluguel de token.
+| Approach | Problem |
+|---|---|
+| Message `[COWORK ACTIVATED]` in history | Pollutes the conversation, counts as a user turn, gets lost when history is truncated |
+| One-shot system prompt at task start | Stops applying if the session is rebuilt or the context is reassembled |
+| **Dynamic system-prompt section** | Re-evaluated on every assembly; survives truncation, reload and restart |
 
-| Seção | Regra | Por que existe |
-|-------|-------|----------------|
-| 1. Narre o trabalho | 1 linha antes de cada bloco de ação | O painel mostra progresso visual; a narrativa é a "voz" do trabalho. Silêncio prolongado parece travamento. |
-| 2. Browser ao vivo | Tarefas web sempre pela ferramenta que publica screenshots | É o que alimenta o painel (Sistema 4). Muitos passos pequenos = muitas fotos = sensação de ao vivo. |
-| 3. Arquivos como entregas | Diretório por tarefa + caminhos absolutos + lista final | Entregas previsíveis: o usuário (e o painel) sabe onde procurar. |
-| 4. Limites duros | Destrutivo só com confirmação; nunca expor segredos; escopo combinado | A confiança do usuário no modo inteiro depende disso. |
-| 5. Encerramento | Resumo ≤5 linhas com arquivos e pendências | Fecha o ciclo "delegar → revisar". |
-
-## Como injetar (a parte que todo mundo erra)
-
-**Errado — mensagem no histórico:**
+The pattern: your prompt builder asks "is Cowork mode active in this session?"
+and, if so, concatenates the law's content with a header making clear it is
+**context injection, not a user message**:
 
 ```
-user: [COWORK ATIVADO] Leia o arquivo cowork-core.md e trate-o como lei...
+COWORK MODE ACTIVE — context injection (this is NOT a user message).
+Applies to ALL turns of this session; only /chat deactivates it.
+
+<law content>
 ```
 
-Problemas: polui a conversa, some quando o histórico é truncado, e o modelo pode "esquecer" depois de muitos turnos. Foi assim na v1 do nosso plugin — abandonamos.
+## Anatomy of a good law
 
-**Certo — seção de system prompt reavaliada a cada montagem:**
+The canonical law has 5 sections, all deliberate:
 
-```js
-const system = [BASE_PROMPT, buildModeSection({ sessionEvents, readFile })]
-  .filter(Boolean)
-  .join("\n\n");
-```
+1. **Narrate the work** — the panel shows images; without narration the user
+   watches a silent film. One line per action block.
+2. **Live browser** — forces the tool that *publishes screenshots* (Browser
+   Use Cloud) and small steps (each step = one new capture in the panel).
+   Without this clause the agent may solve everything via API and the panel
+   stays empty.
+3. **Files as deliverables** — predictable directory
+   (`$COWORK_DIR/<YYYY-MM-DD>-<slug>/`), absolute paths, mandatory final
+   listing. The panel and the user both depend on this convention.
+4. **Hard limits** — destructive actions require prior confirmation; never
+   expose secrets; stop if scope drifts. This lives in the law (not the UI)
+   so it holds even when the agent is triggered via API/CLI.
+5. **Wrap-up** — summary ≤5 lines with files and pending items. Closes the
+   delegation loop.
 
-- A lei entra **antes** das mensagens, com um cabeçalho explícito: *"isto NÃO é mensagem do usuário; vale para TODOS os turnos; só desativa com /chat"*.
-- Como é reavaliada a cada prompt, desligar o modo (`/chat`) remove a lei **no turno seguinte** — sem resíduo.
-- Cacheie a leitura do arquivo por processo; falha de leitura vira `""` (modo sem lei), nunca quebra a montagem.
+## Adapting to your app
 
-## Fallback para hosts sem system prompt dinâmico
+1. **Replace the paths.** `$COWORK_DIR/<YYYY-MM-DD>-<slug>/` is a placeholder;
+   pick yours (e.g. `~/cowork/`, `/var/app/deliverables/`) and keep the law,
+   the schema (`deliverables.directoryTemplate`) and the UI consistent.
+2. **Replace the browser tool** if you don't use Browser Use Cloud — see
+   [`04-browser-feed.md`](04-browser-feed.md) for alternatives. The law must
+   name the tool the agent actually has.
+3. **Keep it short.** The law rides along in every prompt of the session;
+   each line costs tokens on every turn. The canonical version is 31 lines.
+4. **Don't negotiate the hard limits.** If your app sends e-mail or posts on
+   social media, that section is what stands between the agent and an
+   irreversible incident.
 
-Se o seu host não deixa compor o system prompt por turno, o fallback é concatenar a lei **à primeira mensagem da tarefa** (nunca substituindo o rascunho do usuário):
+## Anti-patterns
 
-```
-[leia law/cowork-core.md e trate como lei desta tarefa]
-
-TAREFA: <o que o usuário pediu>
-```
-
-Funciona, mas degrada: a lei pode ser truncada em conversas longas. Trate como plano B — e registre no seu roadmap migrar para injeção por seção.
-
-## Adaptando a lei ao seu produto
-
-1. **Troque os caminhos.** `/home/arthur/jarvis/cowork/<AAAA-MM-DD>-<slug>/` era o nosso; defina o seu e mantenha lei, schema (`deliverables.directoryTemplate`) e UI consistentes.
-2. **Troque o provedor de browser.** A lei cita Browser Use Cloud (`bu_run`); se usar Playwright/CDP próprio, nomeie a ferramenta real — o modelo precisa do nome exato da tool.
-3. **Revise os limites duros.** A lista de "destrutivo" deve refletir o SEU domínio: deletar, sobrescrever fora do diretório da tarefa, enviar mensagem/e-mail, postar, pagar, agendar.
-4. **Não cresça.** Se passar de ~50 linhas, corte. Lei longa dilui obediência.
+- ❌ Injecting the law as a user message "so the model takes it seriously" —
+  the opposite happens: it becomes negotiable conversation.
+- ❌ Law with examples of *what to build* — that's a task brief, not a law.
+  The law governs conduct, not content.
+- ❌ Modes that stack silently. Define precedence (in our case: the last
+  command wins, `/chat` clears everything).
