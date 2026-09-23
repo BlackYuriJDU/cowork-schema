@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/BlackYuriJDU/cowork-schema/blob/main/schema/cowork-mode.schema.json",
+  "title": "Cowork Mode Definition",
+  "description": "Configuração declarativa de um modo Cowork: lei, comandos, painel e feed de browser. Valide seu arquivo de config contra este schema antes de carregar no seu app.",
+  "type": "object",
+  "required": ["mode", "law", "commands", "panel"],
+  "additionalProperties": false,
+  "properties": {
+    "mode": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "Identificador estável do modo (usado no log de eventos e nos comandos)."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Rótulo exibido na UI (pill, aba, menu)."
+        },
+        "icon": {
+          "type": "string",
+          "description": "Nome do ícone da sua biblioteca (ex.: 'monitor', 'orbit')."
+        },
+        "description": {
+          "type": "string",
+          "description": "Texto curto explicando o modo (tooltip / ajuda)."
+        }
+      }
+    },
+    "law": {
+      "type": "object",
+      "required": ["source", "injection"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Caminho ou URL do markdown com a lei do modo (ex.: law/cowork-core.md)."
+        },
+        "header": {
+          "type": "string",
+          "description": "Cabeçalho prefixado à lei na injeção, deixando claro que NÃO é mensagem do usuário."
+        },
+        "injection": {
+          "type": "string",
+          "enum": ["system-prompt-section", "first-message", "tool-result"],
+          "description": "Onde a lei entra. 'system-prompt-section' é o recomendado (reavaliado a cada montagem de prompt); os demais são fallbacks para hosts sem system prompt dinâmico."
+        }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "required": ["activate", "deactivate", "eventType"],
+      "additionalProperties": false,
+      "properties": {
+        "activate": {
+          "type": "string",
+          "pattern": "^/[a-z][a-z0-9-]*$",
+          "description": "Comando que ativa o modo (ex.: /cowork). Deve gravar um evento no log da sessão."
+        },
+        "deactivate": {
+          "type": "string",
+          "pattern": "^/[a-z][a-z0-9-]*$",
+          "description": "Comando que desativa (ex.: /chat). Também grava evento — o estado é derivado do último."
+        },
+        "eventType": {
+          "type": "string",
+          "description": "Tipo do evento durável que registra a troca de modo (ex.: 'command/run')."
+        },
+        "recordInput": {
+          "type": "boolean",
+          "default": false,
+          "description": "Se false, o comando não ecoa como mensagem visível no chat — o log já é a fonte da verdade."
+        }
+      }
+    },
+    "panel": {
+      "type": "object",
+      "required": ["slot", "features"],
+      "additionalProperties": false,
+      "properties": {
+        "slot": {
+          "type": "string",
+          "enum": ["sidebar-right", "sidebar-left", "bottom", "full-overlay"],
+          "description": "Onde o painel do modo é renderizado."
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "taskTimer": {
+              "type": "boolean",
+              "default": true,
+              "description": "Cronômetro da tarefa (mm:ss), zerado a cada nova tarefa."
+            },
+            "liveBrowser": {
+              "type": "boolean",
+              "default": true,
+              "description": "Exibe o último screenshot publicado pelo agente (object-fit: contain, tela cheia do painel)."
+            },
+            "steerInput": {
+              "type": "boolean",
+              "default": true,
+              "description": "Caixa de texto no rodapé do painel para direcionar a tarefa sem sair do modo."
+            },
+            "deliverablesList": {
+              "type": "boolean",
+              "default": false,
+              "description": "Lista os arquivos citados pelo agente como entregas (extraídos do texto da sessão)."
+            }
+          }
+        }
+      }
+    },
+    "browserFeed": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["browser-use-cloud", "playwright", "cdp-screenshot", "custom"],
+          "description": "Quem produz os screenshots da navegação do agente."
+        },
+        "urlPattern": {
+          "type": "string",
+          "description": "Regex (string) para extrair URLs de screenshot do texto da sessão. Default do Browser Use Cloud: https://cdn\\.browser-use\\.com/screenshots/[^\\s\"'\\\\)]+"
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 250,
+          "default": 1000,
+          "description": "Intervalo de atualização do painel quando o feed é por polling (alternativa: reativo por evento de sessão)."
+        }
+      }
+    },
+    "deliverables": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "directoryTemplate": {
+          "type": "string",
+          "description": "Template do diretório de entregas (ex.: 'cowork/<AAAA-MM-DD>-<slug>/'). Deve bater com a lei."
+        },
+        "absolutePaths": {
+          "type": "boolean",
+          "default": true,
+          "description": "Exigir caminhos absolutos nas entregas (o painel consegue linkar/listar)."
+        }
+      }
+    }
+  }
+}
